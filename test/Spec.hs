@@ -6,7 +6,7 @@ parser_params = ParseParameters
   { tag_open   = "<"
   , tag_close  = ">"
   , tag_argsep = "|"
-  , tags = [ Tag "t" EnvLeaf (CountNat Zero) ]
+  , tags = [ Tag "t" (ArityN Zero) EnvLeaf ]
   }
 
 source_text = "<t>"

@@ -14,6 +14,8 @@ data ParseParameters = ParseParameters
 parse :: ParseParameters -> S -> ParseTree
 parse params source = let
 
+  wordseps = [ tag_open params, tag_close params, tag_argsep params, " " ]
+
   -- if name beginning matches some tag,
   --   then: Just that tag
   --   else: Nothing
@@ -48,7 +50,7 @@ parse params source = let
   extract_tag_open = extract (tag_open params)
 
   extract_tag_name :: S -> (S, S)
-  extract_tag_name = extract_word . extract_whitespace
+  extract_tag_name = (extract_word wordseps) . extract_whitespace
 
   extract_tag_args :: S -> ([S], S)
   extract_tag_args s = let
@@ -91,11 +93,12 @@ parse params source = let
             (args, s3) = extract_tag_args s2
             mb_s4      = extract_tag_close s3
             in case mb_s4 of
-              Nothing -> error $ "expected tag close"
+              Nothing -> error $ "expected tag close: " ++ s2
               Just s4 -> Just (TagParsed tag args, s4)
 
   rec :: ParseTree -> S -> (ParseTree, S)
-  rec parent s = let
+  rec parent "" = (parent, "")
+  rec parent s  = let
     rec_with_child :: ParseTree -> S -> (ParseTree, S)
     rec_with_child child s' = rec (add_child child parent) s'
     in case extract_tag s of
@@ -110,7 +113,7 @@ parse params source = let
         -- extract string
         (Just (str, s')) -> rec_with_child (ParseLeafS str) s'
         -- end of input
-        Nothing -> (parent, s)
+        Nothing -> (parent, "")
 
   in fst $ rec (ParseBranch TagParsedRoot []) source
 
@@ -121,6 +124,7 @@ begins :: S -> S -> Bool
 begins target source = case (target, source) of
   ([]  , []  ) -> True
   ([]  , _   ) -> True
+  (_   , []  ) -> False
   (t:ts, s:ss) -> if t == s then begins ts ss else False
 
 -- if `target` begins `source`,
@@ -133,10 +137,14 @@ extract target source =
     else Nothing
 
 -- `source` => the first word of `source, `source` with the first word removed
-extract_word :: S -> (S, S)
-extract_word []       = ([], [])
-extract_word (' ':cs) = ([], ' ':cs)
-extract_word (c  :cs) = (c:word, rest) where (word, rest) = extract_word cs
+extract_word :: [S] -> S -> (S, S)
+extract_word wordseps s =
+  case s of
+    "" -> ("", "")
+    (c:s') ->
+      if any (\t -> t `begins` s) wordseps
+        then ("", s)
+        else rec c s' where rec c s' = ((c:cs), s'') where (cs, s'') = extract_word wordseps s'
 
 extract_whitespace :: S -> S
 extract_whitespace s = case s of

@@ -10,13 +10,20 @@ data Environment
   | EnvVerbatim 
   deriving (Show)
 
-data Count
-  = CountNat Nat
-  | CountStar
-  deriving (Show)
+data Arity
+  = ArityN Nat
+  | ArityS
+
+instance Show Arity where
+  show (ArityN n) = show n
+  show ArityS = "*"
 
 data Tag = Tag
   { name  :: TagName
+  , arity :: Arity
   , env   :: Environment
-  , arity :: Count
-  } deriving (Show)
+  }
+
+instance Show Tag where
+  show (Tag n a EnvBranch) = "<" ++ n ++ "(" ++ show a ++ ")::EnvBranch>"
+  show (Tag n a _) = "<" ++ n ++ "(" ++ show a ++ ")>"
