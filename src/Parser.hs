@@ -81,7 +81,7 @@ parse params source = let
 
   extract_tag :: S -> Maybe (TagParsed, S)
   extract_tag s =
-    case extract_tag_open source of
+    case extract_tag_open s of
       -- no tag here
       Nothing -> Nothing
       -- a tag starts here
@@ -95,6 +95,27 @@ parse params source = let
             in case mb_s4 of
               Nothing -> error $ "expected tag close: " ++ s2
               Just s4 -> Just (TagParsed tag args, s4)
+
+  -- rec :: ParseTree -> S -> IO (ParseTree, S)
+  -- rec parent "" = return (parent, "")
+  -- rec parent s  = let
+  --   rec_with_child :: ParseTree -> S -> IO (ParseTree, S)
+  --   rec_with_child child s' = rec (add_child child parent) s'
+  --   in do
+  --     print (s, extract_tag s)
+  --     case extract_tag s of
+  --       -- extract tag
+  --       (Just (tp, s')) ->
+  --         case env (tag tp) of
+  --           EnvBranch   -> rec (ParseBranch tp []) s' >>= \(child, s'') -> rec_with_child child s''
+  --           EnvLeaf     -> rec_with_child child s'  where child        = (ParseLeafT tp)
+  --           EnvVerbatim -> rec_with_child child s'' where child        = add_child (ParseLeafS str) parent
+  --                                                         (str, s'')   = extract_verbatim (tag tp) s'
+  --       Nothing -> case extract_string s of
+  --         -- extract string
+  --         (Just (str, s')) -> rec_with_child (ParseLeafS str) s'
+  --         -- end of input
+          -- Nothing -> return (parent, "")
 
   rec :: ParseTree -> S -> (ParseTree, S)
   rec parent "" = (parent, "")
@@ -115,6 +136,7 @@ parse params source = let
         -- end of input
         Nothing -> (parent, "")
 
+  -- in rec (ParseBranch TagParsedRoot []) source >>= \(pt, _) -> return pt
   in fst $ rec (ParseBranch TagParsedRoot []) source
 
 --------------------------------------------------------------------------------
@@ -160,8 +182,11 @@ data TagParsed
       { tag  :: Tag
       , args :: [String] } 
   | TagParsedRoot
-  deriving (Show)
 
+instance Show TagParsed where
+  show TagParsedRoot      = "<root>"
+  show (TagParsed t [])   = show t
+  show (TagParsed t args) = show t ++ "(" ++ show args ++ ")"
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
@@ -169,7 +194,11 @@ data ParseTree
   = ParseBranch { val_tag :: TagParsed, children :: [ParseTree] }
   | ParseLeafT  { val_tag :: TagParsed }
   | ParseLeafS  { val_str :: S }
-  deriving (Show)
+
+instance Show ParseTree where
+  show (ParseBranch t cs) = show t ++ " { " ++ show cs ++ " } "
+  show (ParseLeafT  t   ) = show t
+  show (ParseLeafS  s   ) = s
 
 add_child :: ParseTree -> ParseTree -> ParseTree
 add_child child parent = case parent of
