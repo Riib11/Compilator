@@ -1,6 +1,9 @@
 module Main where
 
-import Lib
+import Prelude hiding (lex)
+import Lexer
 
-main :: IO ()
-main = putStrLn "hello world, this is Compilator!"
+lp = LexerParameters [" ","<",">"]
+source_text = "<p>Hello World!</p>"
+
+main = do
