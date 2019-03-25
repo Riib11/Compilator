@@ -13,6 +13,18 @@ data ParseParameters = ParseParameters
 
 parse :: ParseParameters -> S -> ParseTree
 parse params source = let
+
+  -- if name beginning matches some tag,
+  --   then: Just that tag
+  --   else: Nothing
+  get_tag_from_name :: S -> Maybe Tag
+  get_tag_from_name s = let
+    f :: Maybe Tag -> Tag -> Maybe Tag
+    f mb_tag tag =
+      case mb_tag of
+        Just t  -> Just t
+        Nothing -> if (name tag) `begins` s then Just tag else Nothing
+    in foldl f Nothing (tags params)
   
   -- extracts the next string up to the next tag open
   extract_string :: S -> Maybe (S, S)
@@ -37,18 +49,6 @@ parse params source = let
 
   extract_tag_name :: S -> (S, S)
   extract_tag_name = extract_word . extract_whitespace
-
-  -- if name matches some tag,
-  --   then: Just that tag
-  --   else: Nothing
-  get_tag_from_name :: S -> Maybe Tag
-  get_tag_from_name s = let
-    f :: Maybe Tag -> Tag -> Maybe Tag
-    f mb_tag tag =
-      case mb_tag of
-        Just t  -> Just t
-        Nothing -> if s == (name tag) then Just tag else Nothing
-    in foldl f Nothing (tags params)
 
   extract_tag_args :: S -> ([S], S)
   extract_tag_args s = let
