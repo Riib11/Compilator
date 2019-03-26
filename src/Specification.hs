@@ -1,5 +1,6 @@
 module Specification where
 
+import Utility
 import Tag
 
 data Specification = Specification
@@ -9,3 +10,13 @@ data Specification = Specification
   , tag_classes :: [TagClass]
   }
   deriving (Show)
+
+test_spec = Specification
+  { tag_open    = "<"
+  , tag_close   = ">"
+  , tag_argsep  = "|"
+  , tag_classes = []
+  }
+
+reserveds :: Specification -> [String]
+reserveds spec = map (\f -> f spec) [tag_open, tag_close, tag_argsep]

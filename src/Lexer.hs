@@ -1,5 +1,6 @@
 module Lexer where
 
+import Prelude hiding (lex)
 import Utility
 import Specification
 
@@ -8,10 +9,10 @@ lex :: Specification -> String -> [String]
 lex spec source = let
   rec :: String -> String -> [String]
   rec w s =
-    case source of
+    case s of
       ""   -> wrap w
       c:s' ->
-        case extract (tag_open spec) s of
-          Nothing -> rec (w ++ [c]) s'
-          Just s' -> wrap w ++ [tag_open spec] ++ rec "" s'
+        case extract_any (reserveds spec) s of
+          Nothing       -> rec (w ++ [c]) s'
+          Just (r, s'') -> wrap w ++ [r] ++ rec "" s''
   in rec "" source

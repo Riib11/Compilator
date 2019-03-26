@@ -11,7 +11,7 @@ data TagClass = TagClass
   deriving (Show)
 
 data Arity
-  = ArityN Nat
+  = ArityI Int
   | ArityS
   deriving (Show)
 
