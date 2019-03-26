@@ -1,15 +1,12 @@
-import Natural
+import Specification
 import Tag
+import Lexer
 import Parser
+import Compiler
 
-parser_params = ParseParameters
-  { tag_open   = "<"
-  , tag_close  = ">"
-  , tag_argsep = "|"
-  , tags = [ Tag "t" (ArityN Zero) EnvLeaf ]
-  }
+spec = Specification _
 
-source_text = "<t><t>"
+source = _
 
 main = do
   putStrLn ""
