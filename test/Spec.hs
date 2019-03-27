@@ -13,7 +13,7 @@ specification = Specification
   , tag_classes = [ TagClass "t" (ArityI 0) (Environment True False) ]
   }
 
-source = "<t>This is the contents of a tag</t>"
+source = "<t>This is the contents of a tag</t><t>This is the contents of a tag</t>"
 
 section = putStrLn $ "\n" ++ (take 50 $ repeat '=')
 
@@ -25,5 +25,5 @@ main = do
   section  
   -- let parsed = parse specification lexed
   parsed <- parseIO specification lexed
-  print $ parsed
+  putStrLn ""
   
