@@ -4,9 +4,9 @@ module Tag where
 ------------------------------------------------------------------------------------------------------------------------------
 
 data TagClass = TagClass
-  { name  :: String
-  , arity :: Arity
-  , env   :: Environment
+  { tc_name  :: String
+  , tc_arity :: Arity
+  , tc_env   :: Environment
   }
   deriving (Show)
 
@@ -15,9 +15,14 @@ data Arity
   | ArityS
   deriving (Show)
 
+check_arity :: Arity -> Int -> Bool
+check_arity arity n = case arity of
+  ArityI n' -> n == n'
+  ArityS    -> True
+
 data Environment = Environment
-  { is_container :: Bool
-  , is_verbatim  :: Bool
+  { env_is_container :: Bool
+  , env_is_verbatim  :: Bool
   }
   deriving (Show)
 
@@ -25,8 +30,8 @@ data Environment = Environment
 ------------------------------------------------------------------------------------------------------------------------------
 
 data Tag = Tag
-  { tag_class :: TagClass
-  , arguments :: [String]
+  { t_tagclass :: TagClass
+  , t_args     :: [String]
   }
   deriving (Show)
 

@@ -25,3 +25,7 @@ extract_word splits source@(c:s') =
   case extract_any splits source of
     Nothing      -> (c:word, s'') where (word, s'') = extract_word splits s'
     Just (x,s'') -> ("", source)
+
+
+get_by_key :: Eq b => (a -> b) -> b -> [a] -> Maybe a
+get_by_key key_of x = foldl (\mb_a a -> if key_of a == x then Just a else mb_a) Nothing

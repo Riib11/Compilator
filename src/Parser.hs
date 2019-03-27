@@ -69,9 +69,9 @@ type ParseList = [ParseListItem]
 data ParseListItem = PLIPTag ParseTag | PLIString String deriving (Show)
 
 data ParseTag = PTag
-  { p_name   :: String
-  , p_is_end :: Bool
-  , p_args   :: [String] }
+  { pt_name   :: String
+  , pt_is_end :: Bool
+  , pt_args   :: [String] }
   deriving (Show)
 
 
@@ -86,12 +86,12 @@ parse_to_tree spec list = let
     []     -> (parent, [])
     (x:xs) -> case x of
       PLIPTag pt ->
-        let child = PTLeafT (parsetag_to_tag pt)
+        let child = PTLeafT (parsetag_to_tag spec pt)
         in if pt `is_end_ptag_of` (pt_tag parent)
           -- is end tag of parent
           then (parent, [])
           -- is a new tag
-          else if (is_container.env.tag_class.pt_tag) child
+          else if (env_is_container.tc_env.t_tagclass.pt_tag) child
             -- is a container
             then let
               (child', xs') = rec xs child'
@@ -109,10 +109,24 @@ parse_to_tree spec list = let
   in fst $ rec list (PTRoot [])
 
 is_end_ptag_of :: ParseTag -> Tag -> Bool
-is_end_ptag_of ptag tag = ((p_name ptag) == (name.tag_class $ tag)) && (p_is_end ptag)
+is_end_ptag_of ptag tag = pt_is_end ptag && pt_name ptag == (tc_name.t_tagclass $ tag)
 
-parsetag_to_tag :: ParseTag -> Tag
-parsetag_to_tag pt = error "unimplemented"
+args_error :: ParseTag -> TagClass -> a
+args_error ptag tagclass = error $
+  "incorrect number of arguments:" ++ "\n" ++
+  "  `" ++ show (tc_name tagclass) ++ "` expected `" ++ show (tc_arity tagclass) ++ "` arguments," ++ "\n" ++
+  "  but found `" ++ show (length $ pt_args ptag) ++ "` arguments" ++ "\n"
+
+parsetag_to_tag :: Specification -> ParseTag -> Tag
+parsetag_to_tag spec ptag@(PTag pt_name pt_is_end pt_args) =
+  let mb_tagclass = get_by_key tc_name pt_name (tag_classes spec)
+  in case mb_tagclass of
+    Just tagclass ->
+      if not $ check_arity (tc_arity tagclass) (length pt_args)
+        -- [!] has incorrect number of arguments
+        then args_error ptag tagclass
+        -- has correct number of arguments
+        else Tag tagclass pt_args
 
 
 data ParseTree
