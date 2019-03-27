@@ -10,16 +10,20 @@ specification = Specification
   , tag_close   = ">"
   , tag_argsep  = "|"
   , tag_end     = "/"
-  , tag_classes = []
+  , tag_classes = [ TagClass "t" (ArityI 0) (Environment True False) ]
   }
 
 source = "<t>This is the contents of a tag</t>"
 
+section = putStrLn $ "\n" ++ (take 50 $ repeat '=')
+
 main = do
-  putStrLn ""
-  putStrLn $ take 50 $ repeat '-'
-  -- print $ lex specification source
-  print $
-    ( take_ptag specification
-    . lex specification
-    ) source
+  section
+  let lexed = lex specification source
+  print $ lexed
+
+  section  
+  -- let parsed = parse specification lexed
+  parsed <- parseIO specification lexed
+  print $ parsed
+  

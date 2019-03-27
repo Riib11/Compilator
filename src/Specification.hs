@@ -12,14 +12,6 @@ data Specification = Specification
   }
   deriving (Show)
 
-test_spec = Specification
-  { tag_open    = "<"
-  , tag_close   = ">"
-  , tag_argsep  = "|"
-  , tag_end     = "/"
-  , tag_classes = []
-  }
-
 reserveds :: Specification -> [String]
 reserveds spec = map (\f -> f spec) [tag_open, tag_close, tag_argsep]
 

@@ -13,6 +13,14 @@ parse spec tokens = let
   tree = parse_to_tree spec list
   in tree
 
+parseIO :: Specification -> [String] -> IO ParseTree
+parseIO spec tokens = do
+  let list = parse_to_list spec tokens
+  putStrLn $ "parse-list: \n" ++ foldr (\pli s -> " * " ++ show pli ++ "\n" ++ s) "" list
+  let tree = parse_to_tree spec list
+  putStrLn $ "parse-tree: " ++ show tree
+  return tree
+
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
 
@@ -22,8 +30,8 @@ parse_to_list spec tokens =
     []         -> []
     ts@(t:ts') ->
       case take_ptag spec ts of
-        Nothing         -> PLIString t  : parse_to_list spec ts'
-        Just (pt, ts'') -> PLIPTag   pt : parse_to_list spec ts''
+        Nothing         -> PLI_String t  : parse_to_list spec ts'
+        Just (pt, ts'') -> PLI_PTag   pt : parse_to_list spec ts''
 
 take_ptag :: Specification -> [String] -> Maybe (ParseTag, [String])
 take_ptag spec ts@(t:ts') = let
@@ -43,7 +51,7 @@ take_ptag spec ts@(t:ts') = let
     []    -> error "unexpected end of input; expected tag args or tag close"
     t:ts' -> if t == tag_close spec
       then ([], ts)                                         -- close of tag
-      else if t == tag_argsep spec
+      else if (t == tag_argsep spec) || (t == "")
         then let (as, ts'') = take_args ts' in (as, ts'')   -- close of arg
         else let (as, ts'') = take_args ts' in (t:as, ts'') -- new arg
 
@@ -66,7 +74,7 @@ take_ptag spec ts@(t:ts') = let
       in Just $ (PTag name is_end args, ts3)
 
 type ParseList = [ParseListItem]
-data ParseListItem = PLIPTag ParseTag | PLIString String deriving (Show)
+data ParseListItem = PLI_PTag ParseTag | PLI_String String deriving (Show)
 
 data ParseTag = PTag
   { pt_name   :: String
@@ -78,6 +86,10 @@ data ParseTag = PTag
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
 
+error_wrong_end :: ParseTag -> ParseTree -> a
+error_wrong_end pt parent = error $
+  "expected `" ++ show pt ++ "` to be an end tag for the parent `" ++ show parent ++ "`"
+
 parse_to_tree :: Specification -> ParseList -> ParseTree
 parse_to_tree spec list = let
 
@@ -85,37 +97,43 @@ parse_to_tree spec list = let
   rec list parent = case list of
     []     -> (parent, [])
     (x:xs) -> case x of
-      PLIPTag pt ->
-        let child = PTLeafT (parsetag_to_tag spec pt)
-        in if pt `is_end_ptag_of` (pt_tag parent)
-          -- is end tag of parent
-          then (parent, [])
+      PLI_PTag pt ->
+        let child = PT_LeafT { pt_tag = parsetag_to_tag spec pt }
+        in if pt_is_end pt
+          -- is an end tag
+          then if pt_base_name spec pt == (tc_name.t_tagclass.pt_tag) parent
+            -- does end the parent tag
+            then (parent, [])
+            -- [!] is an end tag but does not end the parent tag
+            else error_wrong_end pt parent
           -- is a new tag
           else if (env_is_container.tc_env.t_tagclass.pt_tag) child
             -- is a container
             then let
-              (child', xs') = rec xs child'
+              (child', xs') = rec xs child
               parent' = add_child child' parent
               in rec xs' parent'
             -- is not a container
             else let
               parent' = add_child child parent
               in rec xs parent'
-      PLIString s -> let
-        child = PTLeafS s
+      PLI_String s -> let
+        child = PT_LeafS { pt_str = s }
         parent' = add_child child parent
         in rec xs parent'
 
-  in fst $ rec list (PTRoot [])
+  in fst $ rec list (PT_Root { children = [] })
 
-is_end_ptag_of :: ParseTag -> Tag -> Bool
-is_end_ptag_of ptag tag = pt_is_end ptag && pt_name ptag == (tc_name.t_tagclass $ tag)
+pt_base_name :: Specification -> ParseTag -> String
+pt_base_name spec (PTag {pt_name = name}) =
+  case extract (tag_end spec) name of { Just name' -> name'; Nothing -> name }
 
 args_error :: ParseTag -> TagClass -> a
 args_error ptag tagclass = error $
   "incorrect number of arguments:" ++ "\n" ++
-  "  `" ++ show (tc_name tagclass) ++ "` expected `" ++ show (tc_arity tagclass) ++ "` arguments," ++ "\n" ++
-  "  but found `" ++ show (length $ pt_args ptag) ++ "` arguments" ++ "\n"
+  "  tag-class `" ++ (tc_name tagclass) ++ "` expected `" ++ show (tc_arity tagclass) ++ "` arguments,"
+  ++ "but found `" ++ show (length $ pt_args ptag) ++ "` arguments:" ++ "\n" ++
+  "  " ++ show ptag
 
 parsetag_to_tag :: Specification -> ParseTag -> Tag
 parsetag_to_tag spec ptag@(PTag pt_name pt_is_end pt_args) =
@@ -130,18 +148,18 @@ parsetag_to_tag spec ptag@(PTag pt_name pt_is_end pt_args) =
 
 
 data ParseTree
-  = PTRoot   { children :: [ParseTree] }
-  | PTBranch { pt_tag   :: Tag, children :: [ParseTree] }
-  | PTLeafT  { pt_tag   :: Tag }
-  | PTLeafS  { pt_str   :: String }
+  = PT_Root   { children :: [ParseTree] }
+  | PT_Branch { pt_tag   :: Tag, children :: [ParseTree] }
+  | PT_LeafT  { pt_tag   :: Tag }
+  | PT_LeafS  { pt_str   :: String }
   deriving (Show)
 
 add_child :: ParseTree -> ParseTree -> ParseTree
 add_child child parent = case parent of
-  PTRoot     cs -> PTRoot     $ cs ++ [child]
-  PTBranch t cs -> PTBranch t $ cs ++ [child]
-  PTLeafT  t    -> PTBranch t $ [child]
-  PTLeafS  s    -> error $ "tried to add child to parent PTLeafS: " ++ show (child, parent)
+  PT_Root     cs -> PT_Root     $ cs ++ [child]
+  PT_Branch t cs -> PT_Branch t $ cs ++ [child]
+  PT_LeafT  t    -> PT_Branch t $ [child]
+  PT_LeafS  s    -> error $ "tried to add child to parent PT_LeafS: " ++ show (child, parent)
 
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
