@@ -7,13 +7,19 @@ data TagClass = TagClass
   { tc_name  :: String
   , tc_arity :: Arity
   , tc_env   :: Environment
-  }
-  deriving (Show)
+  , tc_sec   :: String }
+
+instance Show TagClass where
+  show (TagClass { tc_name = n, tc_arity = a, tc_sec = s }) =
+    s ++ "." ++ n ++ "(" ++ show a ++ ")"
 
 data Arity
   = ArityI Int
   | ArityS
-  deriving (Show)
+
+instance Show Arity where
+  show (ArityI n) = show n
+  show (ArityS  ) = "*"
 
 check_arity :: Arity -> Int -> Bool
 check_arity arity n = case arity of
@@ -30,10 +36,12 @@ data Environment = Environment
 ------------------------------------------------------------------------------------------------------------------------------
 
 data Tag = Tag
-  { t_tagclass :: TagClass
-  , t_args     :: [String]
-  }
-  deriving (Show)
+  { tag_class :: TagClass
+  , tag_args  :: [String] }
+
+instance Show Tag where
+  show t = show (tag_class t) ++ show (tag_args t)
 
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
+

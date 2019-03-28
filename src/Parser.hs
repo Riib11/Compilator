@@ -8,34 +8,33 @@ import Tag
 ------------------------------------------------------------------------------------------------------------------------------
 
 parse :: Specification -> [String] -> ParseTree
-parse spec tokens = let
-  list = parse_to_list spec tokens
-  tree = parse_to_tree spec list
-  in tree
+parse spec = parse_to_tree spec . parse_to_list spec
 
 parseIO :: Specification -> [String] -> IO ParseTree
 parseIO spec tokens = do
   let list = parse_to_list spec tokens
-  putStrLn $ "parse-list: \n" ++ list_to_string list
+  putStrLn $ "parse-list:\n" ++ show list
   let tree = parse_to_tree spec list
-  putStrLn $ "parse-tree: " ++ tree_to_string tree
+  putStrLn $ "parse-tree:\n" ++ show tree
   return tree
 
-list_to_string :: ParseList -> String
-list_to_string = foldr (\pli s -> " * "++show pli++"\n"++ s) ""
-
-tree_to_string :: ParseTree -> String
-tree_to_string = let
-  indent i = foldl (++) "" $ take i $ repeat "  "
-  rec i tree = case tree of
-    PT_Root   {             children = cs } -> foldl (\s c -> s++"\n"++(indent i)++" * "++(rec (i+1) c)) "" cs
-    PT_Branch { pt_tag = t, children = cs } -> show t ++ foldl (\s c -> s++"\n"++(indent i)++" * "++(rec (i+1) c)) "" cs
-    PT_LeafT  { pt_tag = t                } -> show t
-    PT_LeafS  { pt_str = s                } -> s
-  in rec 0
-
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
+
+type ParseList = [ParseListItem]
+data ParseListItem
+  = PLI_PTag ParseTag
+  | PLI_String String
+
+instance Show ParseListItem where
+  show (PLI_PTag   pt) = show pt
+  show (PLI_String s ) = show s
+
+data ParseTag = PTag
+  { pt_name   :: String
+  , pt_is_end :: Bool
+  , pt_args   :: [String] }
+  deriving (Show)
 
 parse_to_list :: Specification -> [String] -> ParseList
 parse_to_list spec tokens =
@@ -86,15 +85,6 @@ take_ptag spec ts@(t:ts') = let
       ts3                 = take_tag_close ts2
       in Just $ (PTag name is_end args, ts3)
 
-type ParseList = [ParseListItem]
-data ParseListItem = PLI_PTag ParseTag | PLI_String String deriving (Show)
-
-data ParseTag = PTag
-  { pt_name   :: String
-  , pt_is_end :: Bool
-  , pt_args   :: [String] }
-  deriving (Show)
-
 pt_base_name :: Specification -> ParseTag -> String
 pt_base_name spec (PTag {pt_name = name}) =
   case extract (tag_end spec) name of { Just name' -> name'; Nothing -> name }
@@ -102,9 +92,20 @@ pt_base_name spec (PTag {pt_name = name}) =
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
 
-error_wrong_end :: ParseTag -> ParseTree -> a
-error_wrong_end pt parent = error $
-  "expected `" ++ show pt ++ "` to be an end tag for the parent `" ++ show parent ++ "`"
+data ParseTree
+  = PT_Root   { children :: [ParseTree] }
+  | PT_Branch { pt_tag   :: Tag, children :: [ParseTree] }
+  | PT_LeafT  { pt_tag   :: Tag }
+  | PT_LeafS  { pt_str   :: String }
+
+instance Show ParseTree where
+  show = rec 0 where
+    indent i = foldl (++) "" $ take i $ repeat "  "
+    rec i tree = case tree of
+      PT_Root   {             children = cs } -> foldl (\s c -> s++"\n"++(indent i)++" * "++(rec (i+1) c)) "" cs
+      PT_Branch { pt_tag = t, children = cs } -> show t ++ foldl (\s c -> s++"\n"++(indent i)++" * "++(rec (i+1) c)) "" cs
+      PT_LeafT  { pt_tag = t                } -> show t
+      PT_LeafS  { pt_str = s                } -> s
 
 parse_to_tree :: Specification -> ParseList -> ParseTree
 parse_to_tree spec list = let
@@ -117,13 +118,13 @@ parse_to_tree spec list = let
         let child = PT_LeafT { pt_tag = parsetag_to_tag spec pt }
         in if pt_is_end pt
           -- is an end tag
-          then if pt_base_name spec pt == (tc_name.t_tagclass.pt_tag) parent
+          then if pt_base_name spec pt == (tc_name.tag_class.pt_tag) parent
             -- does end the parent tag
             then (parent, xs)
             -- [!] is an end tag but does not end the parent tag
             else error_wrong_end pt parent
           -- is a new tag
-          else if (env_is_container.tc_env.t_tagclass.pt_tag) child
+          else if (env_is_container.tc_env.tag_class.pt_tag) child
             -- is a container
             then let
               (child', xs') = rec child xs
@@ -168,14 +169,6 @@ parsetag_to_tag spec ptag@(PTag pt_name pt_is_end pt_args) =
         -- has correct number of arguments
         else Tag tagclass pt_args
 
-
-data ParseTree
-  = PT_Root   { children :: [ParseTree] }
-  | PT_Branch { pt_tag   :: Tag, children :: [ParseTree] }
-  | PT_LeafT  { pt_tag   :: Tag }
-  | PT_LeafS  { pt_str   :: String }
-  deriving (Show)
-
 add_child :: ParseTree -> ParseTree -> ParseTree
 add_child child parent = case parent of
   PT_Root     cs -> PT_Root     $ cs ++ [child]
@@ -185,6 +178,10 @@ add_child child parent = case parent of
 
 concat_roots :: ParseTree -> ParseTree -> ParseTree
 concat_roots (PT_Root cs1) (PT_Root cs2) = PT_Root (cs1 ++ cs2)
+
+error_wrong_end :: ParseTag -> ParseTree -> a
+error_wrong_end pt parent = error $
+  "expected `" ++ show pt ++ "` to be an end tag for the parent `" ++ show parent ++ "`"
 
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
