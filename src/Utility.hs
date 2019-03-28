@@ -29,3 +29,6 @@ extract_word splits source@(c:s') =
 
 get_by_key :: Eq b => (a -> b) -> b -> [a] -> Maybe a
 get_by_key key_of x = foldl (\mb_a a -> if key_of a == x then Just a else mb_a) Nothing
+
+get_by_keyfun :: (a -> b -> Bool) -> a -> [b] -> Maybe b
+get_by_keyfun eq a = foldl (\mb_b b -> if eq a b then Just b else mb_b) Nothing

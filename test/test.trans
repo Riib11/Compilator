@@ -1,0 +1,62 @@
+Tag-Open    ___<___
+Tag-Close   ___>___
+Tag-ArgSep  ___|___
+Tag-End     ___/___
+
+Structure {
+  ___head___
+  ___body___
+  ___foot___
+}
+
+Defaults {
+  section ___body___
+  begin   ___ ___
+  end     ___ ___
+  open    ___ ___
+  close   ___ ___
+}
+
+Section ___head___ {
+  begin ___begin head:___
+  end   ___end head___
+}
+
+Tag ___t___ {
+  section ___body___
+  begin   ___begin t___
+  end     ___end t___
+  open    ______
+  close   ______
+  arity 0
+}
+
+
+Tag ___f___ {
+  section ___head___
+  begin   ___ ___
+  end     ___ ___
+  open    ___ ___
+  close   ___ ___
+
+  arity 1
+  arg ___this is argument #1: [[[1]]]___
+}
+
+Tag ___g___ {
+  section ___ ___
+  begin   ___ ___
+  end     ___ ___
+  open    ___ ___
+  close   ___ ___
+
+  arity *
+  arg ___#1: [[[1]]]___
+  arg ___#2: [[[2]]]___
+  arg ___#*: [[[*]]]___
+}
+
+Tag ___v___ {
+  container
+  verbatim
+}
