@@ -26,6 +26,13 @@ extract_word splits source@(c:s') =
     Nothing      -> (c:word, s'') where (word, s'') = extract_word splits s'
     Just (x,s'') -> ("", source)
 
+extract_till :: String -> String -> Maybe (String, String)
+extract_till split source =
+  case source of
+    ""   -> Nothing
+    c:s' -> case extract split source of
+      Nothing -> fmap f (extract_till split s') where f (word, s'') = (c:word, s'')
+      Just s' -> Just ("", s')
 
 get_by_key :: Eq b => (a -> b) -> b -> [a] -> Maybe a
 get_by_key key_of x = foldl (\mb_a a -> if key_of a == x then Just a else mb_a) Nothing
