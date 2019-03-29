@@ -42,6 +42,10 @@ data Tag = Tag
 instance Show Tag where
   show t = show (tag_class t) ++ show (tag_args t)
 
+instance Eq Tag where
+  tag == tag' = (tc_name.tag_class $ tag) == (tc_name.tag_class $ tag')
+  tag /= tag' = (tc_name.tag_class $ tag) /= (tc_name.tag_class $ tag')
+
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
 
