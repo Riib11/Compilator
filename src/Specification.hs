@@ -18,10 +18,11 @@ data Specification = Specification
   
   , _tag_classes           :: [TagClass]
   
-  , _tag_sections          :: [String]
+  , _sections          :: [String]
 
   , _compile_section_begin :: String -> String
   , _compile_section_end   :: String -> String
+  
   , _compile_tag_open      :: Tag -> String
   , _compile_tag_arg       :: Tag -> Int -> String -> String
   , _compile_tag_close     :: Tag -> String
@@ -48,8 +49,8 @@ word_splits spec = [" "] ++ reserveds spec
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
 
-add_tag_section :: String -> Specification -> Specification
-add_tag_section sec spec = set tag_sections (view tag_sections spec ++ [sec]) spec
+add_section :: String -> Specification -> Specification
+add_section sec spec = set sections (view sections spec ++ [sec]) spec
 
 add_tag_class :: TagClass -> Specification -> Specification
 add_tag_class tc spec = set tag_classes (view tag_classes spec ++ [tc]) spec

@@ -1,5 +1,6 @@
 module Compiler where
 
+import Control.Lens hiding (children)
 import Utility
 import Tag
 import Specification
@@ -47,7 +48,7 @@ compile_to_document spec (PT_Root { children = cs }) = let
 
   init_doc_sections secs = case secs of { [] -> []; (s:secs') -> (s, []) : init_doc_sections secs' }
 
-  in rec cs (Document { doc_sections = init_doc_sections (view tag_sections spec) })
+  in rec cs (Document { doc_sections = init_doc_sections (view sections spec) })
 
 add_to_section :: ParseTree -> String -> Document -> Document
 add_to_section t sec_tar (Document { doc_sections = sec_tss }) =

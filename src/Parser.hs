@@ -1,5 +1,6 @@
 module Parser where
 
+import Control.Lens hiding (children)
 import Utility
 import Specification
 import Tag
@@ -53,7 +54,7 @@ take_ptag spec ts@(t:ts') = let
     []    -> error "unexpected end of input; expected tag name"
     t:ts' -> let
       (full_name, rest) = extract_word (word_splits spec) t
-      (name, is_end) = case extract (tag_end spec) full_name of
+      (name, is_end) = case extract (view tag_end spec) full_name of
         Nothing        -> (full_name, False)
         Just base_name -> (base_name, True)
       in (name, is_end, rest:ts')
@@ -61,20 +62,20 @@ take_ptag spec ts@(t:ts') = let
   take_args :: [String] -> ([String], [String])
   take_args ts = case ts of
     []    -> error "unexpected end of input; expected tag args or tag close"
-    t:ts' -> if t == tag_close spec
+    t:ts' -> if t == view tag_close spec
       then ([], ts)                                         -- close of tag
-      else if (t == tag_argsep spec) || (t == "")
+      else if (t == view tag_argsep spec) || (t == "")
         then let (as, ts'') = take_args ts' in (as, ts'')   -- close of arg
         else let (as, ts'') = take_args ts' in (t:as, ts'') -- new arg
 
   take_tag_close :: [String] -> [String]
   take_tag_close ts = case ts of
     []    -> error "unexpected end of input; expected tag close"
-    t:ts' -> if t == tag_close spec
+    t:ts' -> if t == view tag_close spec
       then ts'
       else error $ "expected tag close: " ++ show ts
   
-  in if t /= tag_open spec
+  in if t /= view tag_open spec
     -- not a tag
     then Nothing
     -- is a tag
@@ -87,7 +88,7 @@ take_ptag spec ts@(t:ts') = let
 
 pt_base_name :: Specification -> ParseTag -> String
 pt_base_name spec (PTag {pt_name = name}) =
-  case extract (tag_end spec) name of { Just name' -> name'; Nothing -> name }
+  case extract (view tag_end spec) name of { Just name' -> name'; Nothing -> name }
 
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
@@ -102,10 +103,10 @@ instance Show ParseTree where
   show = rec 0 where
     indent i = foldl (++) "" $ take i $ repeat "  "
     rec i tree = case tree of
-      PT_Root   {             children = cs } -> foldl (\s c -> s++"\n"++(indent i)++" * "++(rec (i+1) c)) "" cs
-      PT_Branch { pt_tag = t, children = cs } -> show t ++ foldl (\s c -> s++"\n"++(indent i)++" * "++(rec (i+1) c)) "" cs
-      PT_LeafT  { pt_tag = t                } -> show t
-      PT_LeafS  { pt_str = s                } -> s
+      PT_Root     cs -> foldl (\s c -> s ++ "\n" ++ indent i ++ " * "++ rec (i+1) c) "" cs
+      PT_Branch t cs -> show t ++ foldl (\s c -> s ++ "\n" ++ indent i ++ " * " ++ rec (i+1) c) "" cs
+      PT_LeafT  t    -> show t
+      PT_LeafS  s    -> s
 
 parse_to_tree :: Specification -> ParseList -> ParseTree
 parse_to_tree spec list = let
@@ -160,7 +161,7 @@ error_wrong_args ptag tagclass = error $
 
 parsetag_to_tag :: Specification -> ParseTag -> Tag
 parsetag_to_tag spec ptag@(PTag pt_name pt_is_end pt_args) =
-  let mb_tagclass = get_by_key tc_name pt_name (tag_classes spec)
+  let mb_tagclass = get_by_key tc_name pt_name (view tag_classes spec)
   in case mb_tagclass of
     Just tagclass ->
       if not $ check_arity (tc_arity tagclass) (length pt_args)
