@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Specification where
 
 import Control.Lens
@@ -9,29 +11,36 @@ import Tag
 
 data Specification = Specification
   
-  { tag_open              :: String
-  , tag_close             :: String
-  , tag_argsep            :: String
-  , tag_end               :: String
+  { _tag_open              :: String
+  , _tag_close             :: String
+  , _tag_argsep            :: String
+  , _tag_end               :: String
   
-  , tag_classes           :: [TagClass]
+  , _tag_classes           :: [TagClass]
   
-  , tag_sections          :: [String]
-  , default_section       :: String
-  
-  , compile_section_begin :: String -> String
-  , compile_section_end   :: String -> String
+  , _tag_sections          :: [String]
 
-  , compile_tag_open      :: Tag -> String
-  , compile_tag_arg       :: Tag -> Int -> String -> String
-  , compile_tag_close     :: Tag -> String
+  , _compile_section_begin :: String -> String
+  , _compile_section_end   :: String -> String
+  , _compile_tag_open      :: Tag -> String
+  , _compile_tag_arg       :: Tag -> Int -> String -> String
+  , _compile_tag_close     :: Tag -> String
+  , _compile_tag_begin     :: Tag -> String
+  , _compile_tag_end       :: Tag -> String
 
-  , compile_tag_begin     :: Tag -> String
-  , compile_tag_end       :: Tag -> String }
+  , _dft_section               :: String
+  , _dft_compile_section_begin :: String -> String
+  , _dft_compile_section_end   :: String -> String
+  , _dft_compile_tag_open      :: Tag -> String
+  , _dft_compile_tag_arg       :: Tag -> Int -> String -> String
+  , _dft_compile_tag_close     :: Tag -> String
+  , _dft_compile_tag_begin     :: Tag -> String
+  , _dft_compile_tag_end       :: Tag -> String }
 
+$(makeLenses ''Specification)
 
 reserveds :: Specification -> [String]
-reserveds spec = map (\f -> f spec) [tag_open, tag_close, tag_argsep]
+reserveds spec = map (\field -> view field spec) [tag_open, tag_close, tag_argsep]
 
 word_splits :: Specification -> [String]
 word_splits spec = [" "] ++ reserveds spec
@@ -39,289 +48,8 @@ word_splits spec = [" "] ++ reserveds spec
 ------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------
 
-type DefinitionDict = [(Definition, DefinitionValue)]
+add_tag_section :: String -> Specification -> Specification
+add_tag_section sec spec = set tag_sections (view tag_sections spec ++ [sec]) spec
 
-data Definition
-  = Def_Tag_Open
-  | Def_Tag_Close
-  | Def_Tag_ArgSep
-  | Def_Tag_End
-  | Def_Structure
-  | Def_Defaults
-  | Def_Section
-  | Def_Tag
-  deriving (Show, Eq)
-
-data DefinitionValue
-  = DV_String    String
-  | DV_AttrBlock DefinitionAttributeDict
-  | DV_ListBlock [String]
-  deriving (Show, Eq)
-
-type DefinitionAttributeDict = [(DefinitionAttribute, String)]
-
-def_header :: Definition -> String
-def_header def = case def of
-  Def_Tag_Open   -> "Tag-Open"
-  Def_Tag_Close  -> "Tag-Close"
-  Def_Tag_ArgSep -> "Tag-ArgSep"
-  Def_Tag_End    -> "Tag-End"
-  Def_Structure  -> "Structure"
-  Def_Defaults   -> "Defaults"
-  Def_Section    -> "Section"
-  Def_Tag        -> "Tag"
-
-def_types =
-  [ Def_Tag_Open, Def_Tag_Close, Def_Tag_ArgSep, Def_Tag_End,
-    Def_Structure, Def_Defaults, Def_Section, Def_Tag ]
-
-data DefinitionAttribute
-  = DA_Name
-  | DA_Section
-  | DA_Begin
-  | DA_End
-  | DA_Open
-  | DA_Close
-  | DA_Arity
-  | DA_Arg
-  deriving (Show, Eq)
-
-defattr_types = [ DA_Section, DA_Begin, DA_End, DA_Open, DA_Close, DA_Arity, DA_Arg ]
-
-defattr_header :: DefinitionAttribute -> String
-defattr_header da = case da of
-  DA_Section -> "section"
-  DA_Begin   -> "begin"
-  DA_End     -> "end"
-  DA_Open    -> "open"
-  DA_Close   -> "close"
-  DA_Arity   -> "arity"
-  DA_Arg     -> "arg"
-
-get_attrval :: DefinitionAttribute -> DefinitionAttributeDict -> String
-get_attrval da dict = case dict of
-  [] -> error $ "could not find" ++ show da ++ " in " ++ show dict
-  ((da',v), dict') -> if da == da' then v else get_attrval da dict'
-
-------------------------------------------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------------------------------------------
-
-compile_specification :: String -> Specification
-compile_specification source = dict_to_spec . source_to_dict $ source
-
-------------------------------------------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------------------------------------------
-
-source_to_dict :: String -> DefinitionDict
-source_to_dict s =
-  let (d, s') = extract_def_header s
-  in case d of
-    Def_Tag_Open   -> (d, dv) : source_to_dict s'' where (dv, s'') = extract_dv d s'
-    Def_Tag_Close  -> (d, dv) : source_to_dict s'' where (dv, s'') = extract_dv d s'
-    Def_Tag_ArgSep -> (d, dv) : source_to_dict s'' where (dv, s'') = extract_dv d s'
-    Def_Tag_End    -> (d, dv) : source_to_dict s'' where (dv, s'') = extract_dv d s'
-    
-    Def_Structure  -> (d, dv) : source_to_dict s'' where (dv, s'') = extract_dv_listblock s'
-    
-    Def_Defaults   -> (d, dv) : source_to_dict s'' where (dv, s'') = extract_dv_attrblock s'
-    Def_Section    -> (d, dv) : source_to_dict s'' where (dv, s'') = extract_dv_attrblock s'
-    Def_Tag        -> (d, dv) : source_to_dict s'' where (dv, s'') = extract_dv_attrblock s'
-
-whitespace = [" ", "\n"]
-rawstring_open = "___"
-rawstring_close = "___"
-block_open = "{"
-block_close = "}"
-
-extract_whitespace :: String -> String
-extract_whitespace s = case extract_any whitespace s of { Nothing -> s; Just (_,s') -> s' }
-
-extract_rawstring :: String -> (String, String)
-extract_rawstring s =
-  let s1 = extract_whitespace s
-  in case extract rawstring_open s1 of
-    Nothing  -> error $ "expected rawstring open; found: " ++ s1
-    Just s2 -> case extract_till rawstring_close s2 of
-      Nothing      -> error $ "expected rawstring close; found: " ++ s2
-      Just (rs,s3) -> (rs, s3)
-
-extract_dv :: Definition -> String -> (DefinitionValue, String)
-extract_dv def s = case def of
-  Def_Tag_Open   -> extract_dv_string s
-  Def_Tag_Close  -> extract_dv_string s
-  Def_Tag_ArgSep -> extract_dv_string s
-  Def_Tag_End    -> extract_dv_string s
-  
-  Def_Structure  -> extract_dv_listblock s
-  
-  Def_Defaults   -> extract_dv_attrblock s
-  Def_Section    -> extract_dv_attrblock s
-  Def_Tag        -> let
-    (tc, s' ) = extract_rawstring s
-    (DV_AttrBlock avs, s'') = extract_dv_attrblock s'
-    attrblock = DV_AttrBlock $ (DA_Name, tc) : avs
-    in attrblock, s''
-
-DV_AttrBlock DefinitionAttributeDict
-
-extract_dv_string :: String -> (DefinitionValue, String)
-extract_dv_string s = (DV_String v, s') where (v, s') = extract_rawstring s
-
-extract_dv_attrblock :: String -> (DefinitionValue, String)
-extract_dv_attrblock s = let
-  extract_attrval :: String -> ((DefinitionAttribute, String), String)
-  extract_attrval s = let
-    s1       = extract_whitespace s
-    (da, s2) = extract_defattr_header s1
-    (v,  s3) = extract_rawstring s2
-    in ((da, v), s3)
-  rec :: String -> (DefinitionAttributeDict, String)
-  rec s = case extract block_close s of
-    -- at end of block
-    Just s' -> ([], s')
-    -- get next attrval
-    Nothing -> let
-      (av,  s' ) = extract_attrval s
-      (avs, s'') = rec s'
-      in (av:avs, s'')
-  (avs, s'') = rec s
-  in (DV_AttrBlock avs, s'')
-
-extract_dv_listblock :: String -> (DefinitionValue, String)
-extract_dv_listblock s = let
-  rec :: String -> ([String], String)
-  rec s = let
-    s1        = extract_whitespace s
-    (v,  s')  = extract_rawstring s1
-    (vs, s'') = rec s'
-    in (v:vs, s'')
-  (vs, s') = rec s
-  in (DV_ListBlock vs, s')
-
-extract_def_header :: String -> (Definition, String)
-extract_def_header s =
-  case get_by_keyfun (\s d -> def_header d `begins` s) s def_types of
-    Just d  -> (d, drop (length $ def_header d) s)
-    Nothing -> error $ "expected Definition header; found: " ++ s
-
-extract_defattr_header :: String -> (DefinitionAttribute, String)
-extract_defattr_header s =
-  case get_by_keyfun (\s da -> defattr_header da `begins` s) s defattr_types of
-    Just da -> (da, drop (length $ defattr_header da) s)
-    Nothing -> error $ "expected DefinitionAttribute header; found: " ++ s
-
-
-------------------------------------------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------------------------------------------
-
-dict_to_spec :: DefinitionDict -> Specification
-dict_to_spec dict = let
-
-  rec :: DefinitionDict -> Specification -> Specification
-  rec dict spec = case dict of
-    [] -> spec
-    ((def, dv):dict') -> let
-      update = case (def, dv) of
-        (Def_Tag_Open,   DV_String v) -> set_tag_open v
-        (Def_Tag_Close,  DV_String v) -> set_tag_close v
-        (Def_Tag_ArgSep, DV_String v) -> set_tag_argsep v
-        (Def_Tag_End,    DV_String v) -> set_tag_end v
-        
-        (Def_Structure, DV_ListBlock vs) -> set_tag_sections vs
-        
-        (Def_Defaults, DV_AttrBlock as) -> set_default_section (get_attrval DA_Section as)
-        (Def_Section,  DV_AttrBlock as) ->
-          add_compile_section_begin (get_attrval DA_Section as, get_attrval DA_Begin as) .
-          add_compile_section_end   (get_attrval DA_Section as, get_attrval DA_End as)
-        (Def_Tag,      DV_AttrBlock as) -> _
-          add_compile_tag_begin (get_attrval DA_ as, get_attrval)
-      spec' = update spec
-      in rec dict' spec'
-
-  in rec dict init_spec
-
-error_no_spec :: String -> a
-error_no_spec s = error $ "not specified: " ++ s
-
-init_spec :: Specification
-init_spec = Specification
-  { tag_open              = error_no_spec $ def_header Def_Tag_Open
-  , tag_close             = error_no_spec $ def_header Def_Tag_Close
-  , tag_argsep            = error_no_spec $ def_header Def_Tag_ArgSep
-  , tag_end               = error_no_spec $ def_header Def_Tag_End
-  
-  , tag_classes           = []
-  
-  , tag_sections          = []
-  , default_section       = error_no_spec "Defaults.section"
-  
-  , compile_section_begin = \s -> ""
-  , compile_section_end   = \s -> ""
-
-  , compile_tag_open      = \t -> ""
-  , compile_tag_arg       = \t i v -> v
-  , compile_tag_close     = \t -> ""
-
-  , compile_tag_begin     = \t -> ""
-  , compile_tag_end       = \t -> "" }
-
-------------------------------------------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------------------------------------------
--- setter function for Specification
-
-set_tag_open to
-  (Specification _  tc ta te tcs tss ds csb cse cto cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb cte)
-set_tag_close tc
-  (Specification to _  ta te tcs tss ds csb cse cto cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb cte)
-set_tag_argsep ta
-  (Specification to tc _  te tcs tss ds csb cse cto cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb cte)
-set_tag_end te
-  (Specification to tc ta _  tcs tss ds csb cse cto cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb cte)
-
-add_tag_class tcls
-  (Specification to tc ta te tcs          tss ds csb cse cto cta ctc ctb cte) =
-  (Specification to tc ta te (tclass:tcs) tss ds csb cse cto cta ctc ctb cte)
-
-set_tag_sections tss
-  (Specification to tc ta te tcs _   ds csb cse cto cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb cte)
-set_default_section ds
-  (Specification to tc ta te tcs tss _  csb cse cto cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb cte)
-
-add_compile_section_begin (sec, beg)
-  (Specification to tc ta te tcs tss ds csb  cse cto cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb' cse cto cta ctc ctb cte) where
-    csb' sec' = if sec' == sec then beg else csb sec'
-add_compile_section_end (sec, end)
-  (Specification to tc ta te tcs tss ds csb cse  cto cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse' cto cta ctc ctb cte) where
-    cse' sec' = if sec' == sec then end else cse sec'
-
-add_tag_open (tag, open)
-  (Specification to tc ta te tcs tss ds csb cse cto  cta ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto' cta ctc ctb cte) where
-    cto' tag' = if tag == tag' then open else cto tag
-add_tag_arg (tag, arg)
-  (Specification to tc ta te tcs tss ds csb cse cto cta  ctc ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta' ctc ctb cte) where
-    cta' tag' = if tag == tag' then arg else cta tag'
-add_tag_close (tag, close)
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc  ctb cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc' ctb cte) where
-    ctc' tag' = if tag == tag' then close else ctc tag
-
-add_compile_tag_begin (tag, beg)
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb  cte) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb' cte) where
-    ctb' tag' = if tag == tag' then beg else ctb tag'
-
-add_compile_tag_end (tag, end)
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb cte ) =
-  (Specification to tc ta te tcs tss ds csb cse cto cta ctc ctb cte') where
-    cte' tag' = if tag == tag' then end else cte tag'
-
+add_tag_class :: TagClass -> Specification -> Specification
+add_tag_class tc spec = set tag_classes (view tag_classes spec ++ [tc]) spec

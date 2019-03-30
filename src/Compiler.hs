@@ -42,12 +42,12 @@ compile_to_document spec (PT_Root { children = cs }) = let
         doc' = case tree of
           PT_Branch { pt_tag = t } -> add_to_section tree (tc_sec.tag_class $ t)     doc
           PT_LeafT  { pt_tag = t } -> add_to_section tree (tc_sec.tag_class $ t)     doc
-          PT_LeafS  { pt_str = s } -> add_to_section tree (default_section spec) doc
+          PT_LeafS  { pt_str = s } -> add_to_section tree (view dft_section spec) doc
         in rec trees' doc'
 
   init_doc_sections secs = case secs of { [] -> []; (s:secs') -> (s, []) : init_doc_sections secs' }
 
-  in rec cs (Document { doc_sections = init_doc_sections (tag_sections spec) })
+  in rec cs (Document { doc_sections = init_doc_sections (view tag_sections spec) })
 
 add_to_section :: ParseTree -> String -> Document -> Document
 add_to_section t sec_tar (Document { doc_sections = sec_tss }) =
@@ -62,19 +62,19 @@ compile_to_target spec doc = let
 
   compile_tag :: Tag -> String
   compile_tag t =
-    compile_tag_open spec t ++
-    (foldl (++) "" $ map (\(i, a) -> compile_tag_arg spec t i a) (zip [1..] $ tag_args t)) ++
-    compile_tag_close spec t
+    view compile_tag_open spec t ++
+    (foldl (++) "" $ map (\(i, a) -> view compile_tag_arg spec t i a) (zip [1..] $ tag_args t)) ++
+    view compile_tag_close spec t
 
   compile_tree :: ParseTree -> String
   compile_tree tree = case tree of
     PT_Branch { pt_tag = t, children = cs } ->
       if (env_is_container.tc_env.tag_class $ t)
         then
-          compile_tag_begin spec t ++
+          view compile_tag_begin spec t ++
           compile_tag t ++
           foldr (\c s -> compile_tree c ++ s) "" cs ++
-          compile_tag_end spec t
+          view compile_tag_end spec t
         else
           foldr (\c s -> compile_tree c ++ s) "" cs
     PT_LeafT { pt_tag = t } -> compile_tag t
@@ -82,14 +82,11 @@ compile_to_target spec doc = let
 
   compile_section :: (String, [ParseTree]) -> String
   compile_section (sec, ts) =
-    compile_section_begin spec sec ++
+    view compile_section_begin spec sec ++
     foldr (\t s -> compile_tree t ++ s) "" ts ++
-    compile_section_end spec sec
+    view compile_section_end spec sec
   
   rec :: [(String, [ParseTree])] -> String
   rec secs = case secs of { [] -> ""; sec:secs' -> compile_section sec ++ rec secs' }
 
   in rec $ doc_sections doc
-
-------------------------------------------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------------------------------------------

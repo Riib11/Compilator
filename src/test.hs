@@ -1,6 +1,7 @@
-data X = X Int Int Int
+{-# LANGUAGE TemplateHaskell #-}
 
-set :: Int -> X -> X
-set i
-  (X a b c) =
-  (X a b i)
+import Control.Lens
+
+data Point = P { _x :: Float, _y :: Float }
+
+$(makeLenses ''Point)
