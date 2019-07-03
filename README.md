@@ -1,5 +1,7 @@
 # Compilator
 
+_Notice:_ This project has largely moved to the, now working, [ATF](https://github.com/Riib11/ATF) project.
+
 An abstractly-specified transpiler. The _Compilator_ work-flow is the following:
 
 1. Create a translation-specification that describes how to translate a tagged source-text (looking similar to XML or HTML) into the desired target-text format.
